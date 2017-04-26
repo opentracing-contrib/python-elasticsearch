@@ -20,7 +20,7 @@ class TestTracing(unittest.TestCase):
         _clear_tracing_state()
 
     def test_tracing(self, mock_perform_req):
-        init_tracing(self.tracer, trace_all_requests=False)
+        init_tracing(self.tracer, trace_all_requests=False, prefix='Prod007')
 
         main_span = DummySpan()
         set_active_span(main_span)
@@ -29,7 +29,7 @@ class TestTracing(unittest.TestCase):
         body = {"any": "data", "timestamp": datetime.datetime.now()}
         self.es.index(index='test-index', doc_type='tweet', id=1, body=body)
         self.assertEqual(1, len(self.tracer.spans))
-        self.assertEqual(self.tracer.spans[0].operation_name, '/test-index/tweet/1')
+        self.assertEqual(self.tracer.spans[0].operation_name, 'Prod007/test-index/tweet/1')
         self.assertEqual(self.tracer.spans[0].is_finished, True)
         self.assertEqual(self.tracer.spans[0].child_of, main_span)
         self.assertEqual(self.tracer.spans[0].tags, {

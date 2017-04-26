@@ -3,16 +3,18 @@ from elasticsearch import Transport
 
 g_tracer = None
 g_trace_all_requests = False
+g_trace_prefix = None
 
 tls = threading.local()
 
-def init_tracing(tracer, trace_all_requests=True):
-    global g_tracer, g_trace_all_requests
+def init_tracing(tracer, trace_all_requests=True, prefix='Elasticsearch'):
+    global g_tracer, g_trace_all_requests, g_trace_prefix
     if hasattr(tracer, '_tracer'):
         tracer = tracer._tracer
 
     g_tracer = tracer
     g_trace_all_requests = trace_all_requests
+    g_trace_prefix = prefix
 
 def enable_tracing():
     tls.tracing_enabled = True
@@ -50,7 +52,11 @@ class TracingTransport(Transport):
         if g_tracer is None:
             raise RuntimeError('No tracer has been set')
 
-        span = g_tracer.start_span(url, child_of=get_active_span())
+        op_name = url
+        if g_trace_prefix is not None:
+            op_name = str(g_trace_prefix) + url
+
+        span = g_tracer.start_span(op_name, child_of=get_active_span())
         span.set_tag('component', 'elasticsearch-py')
         span.set_tag('db.type', 'elasticsearch')
         span.set_tag('span.kind', 'client')

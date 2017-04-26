@@ -14,7 +14,7 @@ Run the following command:
 Getting started
 ===============
 
-Please see the examples directory. Overall, usage requires that a tracer gets set, and initialize the Elasticsearch client specifying `TracingTransport` as tracing class, and mark the next single request to be traced (with a parent span, if any):
+Please see the examples directory. Overall, usage requires that a tracer gets set, and initialize the Elasticsearch client specifying `TracingTransport` as tracing class, and optionally set an active span (to be used as parent span when tracing the actual Elasticsearch statements):
 
 .. code-block:: python
 
@@ -23,16 +23,8 @@ Please see the examples directory. Overall, usage requires that a tracer gets se
     elasticsearch_opentracing.init_tracing(tracer) # An OpenTracing compatible tracer.
     es = Elasticsearch(transport_class=elasticsearch_opentracing.TracingTransport)
 
-    elasticsearch_opentracing.trace_one(parent_span=main_span) # parent_span is optional
-    res = es.get(index='test-index', doc_type='tweet', id=1)
+    elasticsearch_opentracing.set_active_span(main_span) # Optional.
 
-It's also possible to call `start_tracing` and `finish_tracing` to trace any requests under this block:
-
-.. code-block:: python
-
-    elasticsearch_opentracing.start_tracing(parent_span=main_span) # parent_span is optional
-
-    # Both the index and the query requests will be traced as children of main_span.
     es.index(index='test-index', doc_type='tweet', id=99, body={
         'author': 'linus',
         'text': 'Hello there',
@@ -40,19 +32,22 @@ It's also possible to call `start_tracing` and `finish_tracing` to trace any req
     })
     res = es.get(index='test-index', doc_type='tweet', id=99)
 
-    elasticsearch_opentracing.finish_tracing()
+    elasticsearch_opentracing.clear_active_span()
 
-In case of an exception happening under this block, an implicit call to `finish_tracing` will take place, with the request causing the error including error information with it.
-
-Alternatively, you can enable tracing of all requests:
+By default, all Elasticsearch requests are traced. It's possible to have it set to false when initializing the library, and call `enable_tracing` and `disable_tracing` to explicitly trace statements happening within that section:
 
 .. code-block:: python
 
-    elasticsearch_opentracing.init_tracing(tracer, trace_all_requests=True)
-    es = Elasticsearch(transport_class=elasticsearch_opentracing.TracingTransport)
+    elasticsearch_opentracing.init_tracing(tracer, trace_all_requests=False)
 
-    # this request will be traced (without a parent span, though)
-    res = es.get(index='test-index', doc_type='tweet', id=1)
+    elasticsearch_opentracing.enable_tracing()
+
+    res1 = es.get(index='test-index', doc_type='tweet', id=99)
+    res2 = es.get(index='test-index', doc_type='user', id=666)
+
+    elasticsearch_opentracing.disable_tracing()
+
+In case of an exception happening under this block, an implicit call to `disable_tracing` will take place, with the request causing the error including error information with it.
 
 Multithreading
 ==============

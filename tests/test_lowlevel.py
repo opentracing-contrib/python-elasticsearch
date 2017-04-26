@@ -1,10 +1,12 @@
+import datetime
 import unittest
 import threading
 import time
 
 from elasticsearch import Elasticsearch
 from elasticsearch_opentracing import TracingTransport, init_tracing, \
-        trace_one, start_tracing, finish_tracing
+        enable_tracing, disable_tracing, set_active_span, clear_active_span, \
+        get_active_span, _clear_tracing_state
 from mock import patch
 from .dummies import *
 
@@ -14,13 +16,18 @@ class TestTracing(unittest.TestCase):
         self.tracer = DummyTracer()
         self.es = Elasticsearch(transport_class=TracingTransport)
 
-    def test_trace_one(self, mock_perform_req):
-        init_tracing(self.tracer)
+    def tearDown(self):
+        _clear_tracing_state()
+
+    def test_tracing(self, mock_perform_req):
+        init_tracing(self.tracer, trace_all_requests=False)
 
         main_span = DummySpan()
-        trace_one(parent_span=main_span)
+        set_active_span(main_span)
+        enable_tracing()
 
-        self.es.get(index='test-index', doc_type='tweet', id=1)
+        body = {"any": "data", "timestamp": datetime.datetime.now()}
+        self.es.index(index='test-index', doc_type='tweet', id=1, body=body)
         self.assertEqual(1, len(self.tracer.spans))
         self.assertEqual(self.tracer.spans[0].operation_name, '/test-index/tweet/1')
         self.assertEqual(self.tracer.spans[0].is_finished, True)
@@ -28,19 +35,22 @@ class TestTracing(unittest.TestCase):
         self.assertEqual(self.tracer.spans[0].tags, {
             'component': 'elasticsearch-py',
             'db.type': 'elasticsearch',
+            'db.statement': body,
             'span.kind': 'client',
             'elasticsearch.url': '/test-index/tweet/1',
-            'elasticsearch.method': 'GET',
+            'elasticsearch.method': 'PUT',
         })
 
     def test_trace_none(self, mock_perform_req):
-        init_tracing(self.tracer)
+        init_tracing(self.tracer, trace_all_requests=False)
+
+        set_active_span(DummySpan())
 
         self.es.get(index='test-index', doc_type='tweet', id=3)
         self.assertEqual(0, len(self.tracer.spans))
 
     def test_trace_all_requests(self, mock_perform_req):
-        init_tracing(self.tracer, trace_all_requests=True)
+        init_tracing(self.tracer)
 
         for i in range(3):
             self.es.get(index='test-index', doc_type='tweet', id=i)
@@ -48,48 +58,92 @@ class TestTracing(unittest.TestCase):
         self.assertEqual(3, len(self.tracer.spans))
         self.assertTrue(all(map(lambda x: x.is_finished, self.tracer.spans)))
 
-        start_tracing(DummySpan())
-        finish_tracing() # Shouldnt prevent further tracing
+        enable_tracing()
+        disable_tracing() # Shouldnt prevent further tracing
         self.es.get(index='test-index', doc_type='tweet', id=4)
 
         self.assertEqual(4, len(self.tracer.spans))
         self.assertTrue(all(map(lambda x: x.is_finished, self.tracer.spans)))
         self.assertTrue(all(map(lambda x: x.child_of is None, self.tracer.spans)))
 
-    def test_trace_stop(self, mock_perform_req):
+    def test_trace_all_requests_span(self, mock_perform_req):
         init_tracing(self.tracer)
 
-        start_tracing()
-        finish_tracing()
+        main_span = DummySpan()
+        set_active_span(main_span)
+
+        for i in range(3):
+            self.es.get(index='test-index', doc_type='tweet', id=i)
+
+        self.assertEqual(3, len(self.tracer.spans))
+        self.assertTrue(all(map(lambda x: x.is_finished, self.tracer.spans)))
+        self.assertTrue(all(map(lambda x: x.child_of == main_span, self.tracer.spans)))
+
+    def test_disable_tracing(self, mock_perform_req):
+        init_tracing(self.tracer, trace_all_requests=False)
+
+        enable_tracing()
+        disable_tracing()
         self.assertEqual(0, len(self.tracer.spans))
 
         self.es.get(index='test-index', doc_type='tweet', id=1)
         self.assertEqual(0, len(self.tracer.spans))
 
-        finish_tracing() # shouldn't cause a problem
+        disable_tracing() # shouldn't cause a problem
 
-    def test_trace_error(self, mock_perform_req):
-        init_tracing(self.tracer)
+    def test_disable_tracing_span(self, mock_perform_req):
+        init_tracing(self.tracer, trace_all_requests=False)
 
         main_span = DummySpan()
-        start_tracing(main_span)
+        set_active_span(main_span)
+
+        # Make sure the active span was preserved
+        enable_tracing()
+        disable_tracing()
+        self.assertEqual(main_span, get_active_span())
+
+        # Make sure it was preserved, by tracing.
+        enable_tracing()
+
+        self.es.get(index='test-index', doc_type='tweet', id=1)
+        self.assertEqual(1, len(self.tracer.spans))
+        self.assertEqual(main_span, self.tracer.spans[0].child_of)
+
+    def test_clear_span(self, mock_perform_req):
+        init_tracing(self.tracer, trace_all_requests=False)
+
+        enable_tracing()
+
+        set_active_span(DummySpan())
+        clear_active_span()
+
+        self.es.get(index='test-index', doc_type='tweet', id=1)
+        self.assertEqual(1, len(self.tracer.spans))
+        self.assertEqual(None, self.tracer.spans[0].child_of)
+
+    def test_trace_error(self, mock_perform_req):
+        init_tracing(self.tracer, trace_all_requests=False)
+
+        main_span = DummySpan()
+        set_active_span(main_span)
+        enable_tracing()
         mock_perform_req.side_effect = RuntimeError()
 
         try:
             self.es.get(index='test-index', doc_type='tweet', id=1)
         except RuntimeError as exc:
-            pass
+            catched_exc = exc
 
         self.assertEqual(1, len(self.tracer.spans))
         self.assertEqual(True, self.tracer.spans[0].is_finished)
         self.assertEqual(main_span, self.tracer.spans[0].child_of)
         self.assertEqual('true', self.tracer.spans[0].tags['error'])
-        self.assertEqual(True, self.tracer.spans[0].tags['error.object'] != None)
+        self.assertEqual(catched_exc, self.tracer.spans[0].tags['error.object'])
 
     def test_trace_after_error(self, mock_perform_req):
-        init_tracing(self.tracer)
+        init_tracing(self.tracer, trace_all_requests=False)
 
-        start_tracing()
+        enable_tracing()
         mock_perform_req.side_effect = RuntimeError()
 
         try:
@@ -112,22 +166,23 @@ class TestTracing(unittest.TestCase):
         # 2. Trace something from thread-2, make thread-1 before finishing.
         # 3. Check the spans got different parents, and are in the expected order.
         def target1():
-            start_tracing(DummySpan())
+            set_active_span(DummySpan())
+            enable_tracing()
             self.es.get(index='test-index', doc_type='tweet', id=1)
 
             ev.set()
             ev.wait()
 
-            finish_tracing()
+            disable_tracing()
 
         def target2():
             ev.wait()
 
-            start_tracing()
+            enable_tracing()
             self.es.get(index='test-index', doc_type='tweet', id=2)
 
             ev.set()
-            finish_tracing()
+            disable_tracing()
 
         t1 = threading.Thread(target=target1)
         t2 = threading.Thread(target=target2)

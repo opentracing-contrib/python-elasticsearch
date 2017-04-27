@@ -22,12 +22,15 @@ class TestTracing(unittest.TestCase):
     def test_tracing(self, mock_perform_req):
         init_tracing(self.tracer, trace_all_requests=False, prefix='Prod007')
 
+        mock_perform_req.return_value = {'hits': []}
+
         main_span = DummySpan()
         set_active_span(main_span)
         enable_tracing()
 
         body = {"any": "data", "timestamp": datetime.datetime.now()}
-        self.es.index(index='test-index', doc_type='tweet', id=1, body=body)
+        res = self.es.index(index='test-index', doc_type='tweet', id=1, body=body)
+        self.assertEqual(mock_perform_req.return_value, res)
         self.assertEqual(1, len(self.tracer.spans))
         self.assertEqual(self.tracer.spans[0].operation_name, 'Prod007/test-index/tweet/1')
         self.assertEqual(self.tracer.spans[0].is_finished, True)

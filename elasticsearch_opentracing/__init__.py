@@ -76,4 +76,5 @@ class TracingTransport(Transport):
             raise
 
         span.finish()
+        return rv
 

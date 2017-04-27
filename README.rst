@@ -47,6 +47,8 @@ By default, all Elasticsearch requests are traced. It's possible to have it set 
 
     elasticsearch_opentracing.disable_tracing()
 
+When using `trace_all_requests`, any calls made to `enable_tracing` and `disable_tracing` are ignored.
+
 In case of an exception happening under this block, an implicit call to `disable_tracing` will take place, with the request causing the error including error information with it.
 
 Multithreading

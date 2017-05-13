@@ -51,6 +51,18 @@ When using `trace_all_requests`, any calls made to `enable_tracing` and `disable
 
 In case of an exception happening under this block, an implicit call to `disable_tracing` will take place, with the request causing the error including error information with it.
 
+DSL
+===
+
+When using the `elasticsearch-dsl` library (which runs on top of `elasticsearch-py`), the same semantics and calls are used. When creating a default connection, the transport can be specified as well:
+
+.. code-block:: python
+
+    # elasticsearch_dsl.connections.connections
+    connections.create_connection(hosts=['127.0.0.1'],
+                                  transport_class=elasticsearch_opentracing.TracingTransport)
+
+
 Multithreading
 ==============
 

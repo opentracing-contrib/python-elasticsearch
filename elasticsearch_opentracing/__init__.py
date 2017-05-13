@@ -41,6 +41,14 @@ def _clear_tracing_state():
     tls.tracing_enabled = False
     tls.active_span = None
 
+# Values to add as tags from the actual
+# payload returned by Elasticsearch, if any.
+ResultMembersToAdd = [
+    'found',
+    'timed_out',
+    'took',
+]
+
 class TracingTransport(Transport):
     def __init__(self, *args, **kwargs):
         super(TracingTransport, self).__init__(*args, **kwargs)
@@ -65,9 +73,17 @@ class TracingTransport(Transport):
 
         if body:
             span.set_tag('db.statement', body)
+        if params:
+            span.set_tag('elasticsearch.params', params)
 
         try:
             rv = super(TracingTransport, self).perform_request(method, url, params, body)
+
+            if isinstance(rv, dict):
+                for member in ResultMembersToAdd:
+                    if member in rv:
+                        span.set_tag('elasticsearch.{0}'.format(member), str(rv[member]))
+
         except Exception as exc:
             _clear_tracing_state()
             span.set_tag('error', 'true')

@@ -29,7 +29,8 @@ class TestTracing(unittest.TestCase):
         enable_tracing()
 
         body = {"any": "data", "timestamp": datetime.datetime.now()}
-        res = self.es.index(index='test-index', doc_type='tweet', id=1, body=body)
+        res = self.es.index(index='test-index', doc_type='tweet', id=1,
+                            body=body, params={'refresh': True})
         self.assertEqual(mock_perform_req.return_value, res)
         self.assertEqual(1, len(self.tracer.spans))
         self.assertEqual(self.tracer.spans[0].operation_name, 'Prod007/test-index/tweet/1')
@@ -42,6 +43,7 @@ class TestTracing(unittest.TestCase):
             'span.kind': 'client',
             'elasticsearch.url': '/test-index/tweet/1',
             'elasticsearch.method': 'PUT',
+            'elasticsearch.params': {'refresh': True},
         })
 
     def test_trace_none(self, mock_perform_req):
@@ -81,6 +83,35 @@ class TestTracing(unittest.TestCase):
         self.assertEqual(3, len(self.tracer.spans))
         self.assertTrue(all(map(lambda x: x.is_finished, self.tracer.spans)))
         self.assertTrue(all(map(lambda x: x.child_of == main_span, self.tracer.spans)))
+
+    def test_trace_bool_payload(self, mock_perform_req):
+        init_tracing(self.tracer)
+
+        # Some operations, as creating an index, return a bool value.
+        mock_perform_req.return_value = False
+
+        mapping = "{'properties': {'body': {}}}"
+        res = self.es.indices.create('test-index', body=mapping)
+        self.assertFalse(res)
+        self.assertEqual(1, len(self.tracer.spans))
+        self.assertEqual(self.tracer.spans[0].is_finished, True)
+
+    def test_trace_result_tags(self, mock_perform_req):
+        init_tracing(self.tracer, trace_all_requests=False)
+
+        mock_perform_req.return_value = {
+            'found': False,
+            'timed_out': True,
+            'took': 7
+        }
+        enable_tracing()
+        self.es.get(index='test-index', doc_type='tweet', id=1)
+
+        self.assertEqual(1, len(self.tracer.spans))
+        self.assertTrue(all(map(lambda x: x.is_finished, self.tracer.spans)))
+        self.assertEqual('False', self.tracer.spans[0].tags['elasticsearch.found'])
+        self.assertEqual('True', self.tracer.spans[0].tags['elasticsearch.timed_out'])
+        self.assertEqual('7', self.tracer.spans[0].tags['elasticsearch.took'])
 
     def test_disable_tracing(self, mock_perform_req):
         init_tracing(self.tracer, trace_all_requests=False)

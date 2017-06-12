@@ -4,8 +4,8 @@ version = open('VERSION').read()
 setup(
     name='elasticsearch_opentracing',
     version=version,
-    url='https://github.com/carlosalberto/python-elasticsearch/',
-    download_url='https://github.com/carlosalberto/python-elasticsearch/tarball/'+version,
+    url='https://github.com/opentracing-contrib/python-elasticsearch/',
+    download_url='https://github.com/opentracing-contrib/python-elasticsearch/tarball/'+version,
     license='BSD',
     author='Carlos Alberto Cortez',
     author_email='calberto.cortez@gmail.com',

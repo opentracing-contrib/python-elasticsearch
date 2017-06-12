@@ -1,13 +1,11 @@
 from datetime import datetime
 from elasticsearch import Elasticsearch
 
-import lightstep
+import opentracing
 import elasticsearch_opentracing
 
-tracer = lightstep.Tracer(
-    component_name='elasticsearch-simple',
-    access_token='{your_lightstep_token}'
-)
+# Your OpenTracing-compatible tracer here.
+tracer = opentracing.Tracer()
 
 if __name__ == '__main__':
     elasticsearch_opentracing.init_tracing(tracer)

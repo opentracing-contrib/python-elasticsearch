@@ -3,13 +3,11 @@ from elasticsearch import Transport
 from elasticsearch_dsl import DocType, Date, Integer, Keyword, Text
 from elasticsearch_dsl.connections import connections
 
-import lightstep
+import opentracing
 import elasticsearch_opentracing
 
-tracer = lightstep.Tracer(
-    component_name='elasticsearch-map',
-    access_token='{your_lightstep_token}'
-)
+# Your OpenTracing-compatible tracer here.
+tracer = opentracing.Tracer()
 
 class Article(DocType):
     title = Text(analyzer='snowball', fields={'raw': Keyword()})

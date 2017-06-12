@@ -1,13 +1,11 @@
 from elasticsearch import Elasticsearch, Transport
 from elasticsearch_dsl import Search, Q
 
-import lightstep
+import opentracing
 import elasticsearch_opentracing
 
-tracer = lightstep.Tracer(
-    component_name='elasticsearch-dsl',
-    access_token='{your_lightstep_token}'
-)
+# Your OpenTracing-compatible tracer here.
+tracer = opentracing.Tracer()
 
 if __name__ == '__main__':
     elasticsearch_opentracing.init_tracing(tracer)

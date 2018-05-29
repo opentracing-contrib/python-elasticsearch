@@ -4,7 +4,7 @@ import threading
 import time
 
 from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search, Q, DocType, Integer, Keyword, Text
+from elasticsearch_dsl import Search, Q, DocType, Integer, Keyword, Text, Mapping
 from elasticsearch_dsl.connections import connections
 from elasticsearch_dsl.response import Response
 from elasticsearch_opentracing import TracingTransport, init_tracing, \
@@ -13,12 +13,14 @@ from elasticsearch_opentracing import TracingTransport, init_tracing, \
 from mock import patch
 from .dummies import *
 
+
 class Article(DocType):
     title = Text(analyzer='snowball', fields={'raw': Keyword()})
     body = Text(analyzer='snowball')
 
     class Meta:
         index = 'test-index'
+        mapping = Mapping('article')
 
 @patch('elasticsearch.Transport.perform_request')
 class TestTracing(unittest.TestCase):
@@ -61,15 +63,15 @@ class TestTracing(unittest.TestCase):
 
         self.assertEqual(2, len(self.tracer.spans))
         self.assertEqual(map(lambda x: x.operation_name, self.tracer.spans), [
-            'Elasticsearch/test-index',
-            'Elasticsearch/test-index/_mapping/article'
+            u'Elasticsearch/test-index',
+            u'Elasticsearch/test-index/_mapping/article'
         ])
         self.assertTrue(all(map(lambda x: x.is_finished, self.tracer.spans)))
 
     def test_index(self, mock_perform_req):
         init_tracing(self.tracer)
 
-        mock_perform_req.return_value = {'created': True}
+        mock_perform_req.return_value = {'result': 'created'}
 
         article = Article(
             meta={'id': 2},
@@ -80,7 +82,7 @@ class TestTracing(unittest.TestCase):
 
         self.assertTrue(res)
         self.assertEqual(1, len(self.tracer.spans))
-        self.assertEqual(self.tracer.spans[0].operation_name, 'Elasticsearch/test-index/article/2')
+        self.assertEqual(self.tracer.spans[0].operation_name, u'Elasticsearch/test-index/article/2')
         self.assertEqual(self.tracer.spans[0].is_finished, True)
         self.assertEqual(self.tracer.spans[0].tags, {
             'component': 'elasticsearch-py',
@@ -93,4 +95,3 @@ class TestTracing(unittest.TestCase):
             'elasticsearch.url': '/test-index/article/2',
             'elasticsearch.method': 'PUT',
         })
-

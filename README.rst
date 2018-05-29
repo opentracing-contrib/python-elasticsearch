@@ -1,3 +1,8 @@
+
+.. image:: https://travis-ci.org/opentracing-contrib/python-elasticsearch.svg?branch=master
+    :target: http://travis-ci.org/opentracing-contrib/python-elasticsearch
+    :alt: Build Status
+
 #########################
 ElasticSearch Opentracing
 #########################
@@ -76,4 +81,3 @@ If you’re interested in learning more about the OpenTracing standard, please v
 .. _opentracing.io: http://opentracing.io/
 .. _join the mailing list: http://opentracing.us13.list-manage.com/subscribe?u=180afe03860541dae59e84153&id=19117aa6cd
 .. _community@opentracing.io: community@opentracing.io
-

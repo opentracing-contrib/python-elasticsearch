@@ -1,0 +1,3 @@
+elasticsearch
+elasticsearch_dsl
+opentracing

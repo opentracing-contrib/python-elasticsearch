@@ -13,9 +13,7 @@ if __name__ == '__main__':
     client = Elasticsearch('127.0.0.1',
                            transport_class=elasticsearch_opentracing.TracingTransport)
 
-    with tracer.start_span('main span') as main_span:
-        elasticsearch_opentracing.set_active_span(main_span)
-
+    with tracer.start_active_span('main span') as main_scope:
         s = Search(using=client, index='test-index') \
             .filter('term', author='linus') \
             .query('match', text='git')

@@ -15,7 +15,11 @@ setup(
     platforms='any',
     install_requires=[
         'elasticsearch',
-        'opentracing>=1.1,<1.2'
+        'opentracing>=2.0,<2.1'
+    ],
+    tests_require=[
+        'elasticsearch-dsl>=5.1',
+        'mock'
     ],
     classifiers=[
         'Intended Audience :: Developers',
